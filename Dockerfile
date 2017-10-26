@@ -76,6 +76,8 @@ RUN mkdir -p /index
 VOLUME /data/index
 RUN mkdir -p /output
 VOLUME /output
+RUN mkdir -p /tmpdir
+VOLUME /tmpdir
 
 # Set pipeline entry point script
 WORKDIR /app

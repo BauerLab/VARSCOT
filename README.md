@@ -48,7 +48,7 @@ Please note that for the user-defined reference genome already a corresponding i
 To build the classifier run:
 
 ```
-$ build/read_mapping_build/bidir_index -G /path/to/ref/genome.fa -I /path/to/index/prefix
+$ ./build/read_mapping_build/bidir_index -G /path/to/ref/genome.fa -I /path/to/index/prefix
 ```
 
 The index is built using secondary memory.
@@ -79,7 +79,7 @@ Options: -f,  --vcf               Path to input variant file (.vcf), optional ar
                                   Only 23 bp sequences are accepted.
          -o,  --output            Path to output file (.txt).
          -g,  --genome            Path to reference genome (.fa/.fasta)
-         -i,  --index             Path to index with index prefix (see above instructions for building the index).
+         -i,  --index             Path to index (see above instructions for building the index).
          -m,  --mismatch          Maximum number of mismatches (default 8).
                                   At maximum 8 mismatches can be detected which includes mismatches at the 21. position (N-position of the PAM).
          -t,  --threads           Number of threads to use (default 8).
@@ -102,7 +102,7 @@ On a host with Docker installed, in a shell, change to the directory in which th
 
     docker build -t varscot .
 
-This will create a Docker image that can be used to run VARSCOT in a container.
+This will create a Docker image that can be used to run VARSCOT in a container. Only if the Dockerfile or the repositories it refers to change does this build step need to be repeated. 
 
 ### Running
 To run VARSCOT as a Docker container, a command of the following form is required:
@@ -127,33 +127,7 @@ Note that ```varscot``` must be lower case in the ```docker run``` command above
 Othe than what has already been noted in this section that is specific to Docker, information provided in _Usage_ section still applies.
 
 ### Examples
-#### With VCF
-    docker run -v $VCF_DIR:/vcf \
-               -v $BED_DIR:/bed \
-               -v $GENOME_DIR:/genome \
-               -v $INDEX_DIR:/index \
-               -v $PWD:/output \
-               varscot \
-               -f /vcf/example.vcf \
-               -b /bed/example.bed \
-               -g /genome/hg19.fa \
-               -i /index/index \
-               -m 2 \
-               -o /output/output.txt
-
-#### Without VCF
-    docker run -v $BED_DIR:/bed \
-               -v $GENOME_DIR:/genome \
-               -v $INDEX_DIR:/index \
-               -v $PWD:/output \
-               varscot \
-               -b /bed/example.bed \
-               -g /genome/hg19.fa \
-               -i /index/index \
-               -m 2 \
-               -o /output/output.txt
-
-#### Getting Usage
+#### VARSCOT Usage
 	docker run varscot -h
 	VARSCOT [ARGUMENTS]
 
@@ -168,3 +142,84 @@ Othe than what has already been noted in this section that is specific to Docker
 	    -t,  --threads           number of threads to use (default 8)
 	    -e,  --evaluation        either 'mit', 'class' or 'prob' (default 'mit')
 	    -v,  --verbose           keep all temp files
+
+#### Running pipeline with VCF
+    docker run -v $VCF_DIR:/vcf \
+               -v $BED_DIR:/bed \
+               -v $GENOME_DIR:/genome \
+               -v $INDEX_DIR:/index \
+               -v $PWD:/output \
+               varscot \
+               -f /vcf/example.vcf \
+               -b /bed/example.bed \
+               -g /genome/hg19.fa \
+               -i /index/index \
+               -m 2 \
+               -o /output/output.txt
+
+#### Running pipeline without VCF
+    docker run -v $BED_DIR:/bed \
+               -v $GENOME_DIR:/genome \
+               -v $INDEX_DIR:/index \
+               -v $PWD:/output \
+               varscot \
+               -b /bed/example.bed \
+               -g /genome/hg19.fa \
+               -i /index/index \
+               -m 2 \
+               -o /output/output.txt
+
+#### Running commands within the VARSCOT Docker container
+To run commands (e.g. ```bidir_index```) within the VARSCOT Docker container, it is possible to start an interactive shell in a container. A command like this isn't quite right:
+
+    docker run -it varscot /bin/bash
+
+since running the ```varscot``` Docker image corresponds to running the ```VARSCOT``` script. This command would yield a ```VARSCOT``` help message.
+
+What is needed instead is to specify a environment in which the VARSCOT script would be run (within the container). So, given the tail end of ```docker build``` output such as this:
+
+	...
+	Removing intermediate container 7a6dcc43930b
+	Step 53/56 : VOLUME /output
+	---> Running in c299829c679b
+	---> 693278a1f70f
+	Removing intermediate container c299829c679b
+	Step 54/56 : WORKDIR /app
+	---> 7f61d3c61fbc
+	Removing intermediate container 597d23c886d8
+	Step 55/56 : COPY ./entrypoint.sh .
+	---> be019493a15d
+	Removing intermediate container 9aed2ff91226
+	Step 56/56 : ENTRYPOINT /app/entrypoint.sh
+	---> Running in a34cbdcd1e26
+	---> a995e772b72b
+	Removing intermediate container a34cbdcd1e26
+	Successfully built a995e772b72b
+
+step 54 of 56 would be suitable since this immediately precedes the point at which VARSCOT (via entrypoint.sh) would be run. The numeric ID ```7f61d3c61fbc``` on the line after "Step 54/56 ..." can then be used instead of the image name ```varscot```:
+ 
+	docker run -it 7f61d3c61fbc /bin/bash
+
+The result will be an interactive bash shell prompt such as this:
+
+	root@a51dd1386554:/app#
+
+at which commands may be issued. Note that this numeric ID will be different for each ```docker build``` run.
+
+Volumes may also need to be mapped for particular commands, e.g.
+
+	docker run -v $GENOME_DIR:/genome -v $INDEX_DIR:/index -it 7f61d3c61fbc /bin/bash
+
+A ```bidir_index``` command could then be run, e.g.
+ 
+	./build/read_mapping_build/bidir_index -G /genome/genome.fa -I /index/prefix
+
+where ```prefix``` is the prefix of each file in the index directory.
+
+As per the _Usage_ section setting TMPDIR may be necessary. The ```docker run``` command would need to include a temporary directory volume, e.g.
+
+        docker run -v $ROOT:/bed -v $ROOT:/genome -v $ROOT/bidir-index:/index -v /somewhere/else/with/more/space:/tmpdir -it 7f61d3c61fbc /bin/bash
+
+then in the container before the ```bidir_index``` command:
+
+        export TMPDIR=/tmpdir

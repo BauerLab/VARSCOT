@@ -4,8 +4,8 @@ project (VARSCOT_variants CXX)
 
 set (CMAKE_BUILD_TYPE "Release")
 
-#set (CMAKE_PREFIX_PATH "../lib/seqan/util/cmake")
-#set (SEQAN_INCLUDE_PATH "../lib/seqan/include")
+set (CMAKE_PREFIX_PATH "../lib/seqan/util/cmake")
+set (SEQAN_INCLUDE_PATH "../lib/seqan/include")
 
 find_package (OpenMP REQUIRED)
 find_package (SeqAn REQUIRED)
