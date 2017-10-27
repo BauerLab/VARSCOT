@@ -224,7 +224,7 @@ then in the container before the ```bidir_index``` command:
 
         export TMPDIR=/tmpdir
 
-### Output
+## Output
 The output of VARSCOT consists of off-targets detected for each target site.
 Off-targets are numbered based on the corresponding on-target, but numbers don't imply a ranking of any sort.
 Positional information is reported as well as sequence, score, mismatch number and positions.
