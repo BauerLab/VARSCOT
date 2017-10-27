@@ -244,6 +244,10 @@ unsigned const & seqLength)
         CharString combinedVariants = concat(variants);
         snpType = prefix(concat(variants), length(combinedVariants) - 1);
     }
+    else
+    {
+        snpType = "VAR";
+    }
 }
 
 /*!

@@ -102,7 +102,7 @@ On a host with Docker installed, in a shell, change to the directory in which th
 
     docker build -t varscot .
 
-This will create a Docker image that can be used to run VARSCOT in a container. Only if the Dockerfile or the repositories it refers to change does this build step need to be repeated. 
+This will create a Docker image that can be used to run VARSCOT in a container. Only if the Dockerfile or the repositories it refers to change does this build step need to be repeated.
 
 ### Running
 To run VARSCOT as a Docker container, a command of the following form is required:
@@ -197,7 +197,7 @@ What is needed instead is to specify a environment in which the VARSCOT script w
 	Successfully built a995e772b72b
 
 step 54 of 56 would be suitable since this immediately precedes the point at which VARSCOT (via entrypoint.sh) would be run. The numeric ID ```7f61d3c61fbc``` on the line after "Step 54/56 ..." can then be used instead of the image name ```varscot```:
- 
+
 	docker run -it 7f61d3c61fbc /bin/bash
 
 The result will be an interactive bash shell prompt such as this:
@@ -211,7 +211,7 @@ Volumes may also need to be mapped for particular commands, e.g.
 	docker run -v $GENOME_DIR:/genome -v $INDEX_DIR:/index -it 7f61d3c61fbc /bin/bash
 
 A ```bidir_index``` command could then be run, e.g.
- 
+
 	./build/read_mapping_build/bidir_index -G /genome/genome.fa -I /index/prefix
 
 where ```prefix``` is the prefix of each file in the index directory.
@@ -223,3 +223,12 @@ As per the _Usage_ section setting TMPDIR may be necessary. The ```docker run```
 then in the container before the ```bidir_index``` command:
 
         export TMPDIR=/tmpdir
+
+### Output
+The output of VARSCOT consists of off-targets detected for each target site.
+Off-targets are numbered based on the corresponding on-target, but numbers don't imply a ranking of any sort.
+Positional information is reported as well as sequence, score, mismatch number and positions.
+Positions in general refer to the reference genome, especially if they were not detected within variant regions (marked by tag REF).
+However, please note that positions of off-targets that are detected within variant regions might be slightly shifted due to the influence of variants.
+This holds for off-targets containing variants (marked by VAR_chr_start) and off-targets found very closely (usually 23 bp) to a variant (marked by tag VAR).
+In those cases it was not possible to find a valid position relative to the reference as some off-targets might only exist due to a variant and thus never would match any reference position.
