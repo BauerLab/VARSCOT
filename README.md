@@ -229,6 +229,6 @@ The output of VARSCOT consists of off-targets detected for each target site.
 Off-targets are numbered based on the corresponding on-target, but numbers don't imply a ranking of any sort.
 Positional information is reported as well as sequence, score, mismatch number and positions.
 Positions in general refer to the reference genome, especially if they were not detected within variant regions (marked by tag REF).
-However, please note that positions of off-targets that are detected within variant regions might be slightly shifted due to the influence of variants.
-This holds for off-targets containing variants (marked by VAR_chr_start) and off-targets found very closely (usually 23 bp) to a variant (marked by tag VAR).
-In those cases it was not possible to find a valid position relative to the reference as some off-targets might only exist due to a variant and thus never would match any reference position.
+However, please note that positions of off-targets that are detected within variant regions might be slightly shifted.
+This holds for off-targets containing variants (marked by VAR_chr_start) which start within a variant.
+In those cases it was not possible to find a valid position relative to the reference as those off-targets only exist due to a variant and thus never would match any reference position.
