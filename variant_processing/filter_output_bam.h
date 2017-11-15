@@ -186,7 +186,7 @@ std::map<CharString, unsigned> const & chrMap, std::vector<StringSet<CharString>
  * @param[in]       offTargetPos        Starting position of potential off-target
  * @param[in]       seqLength           Length of the target sequences that were searched
  */
-void getSnpType(CharString & snpType, StringSet<CharString> const & fastaID, unsigned const & offTargetPos,
+void getSnpType(CharString & snpType, StringSet<CharString> const & fastaID, unsigned & offTargetPos,
 unsigned const & seqLength)
 {
     StringSet<CharString> variants;
@@ -195,6 +195,8 @@ unsigned const & seqLength)
     appendValue(variants, "VAR_");
     appendValue(variants, fastaID[0]);
     appendValue(variants, "_");
+    int count = 0;
+    bool startFound = false;
     for (unsigned i = 3; i < length(fastaID); i += 3)
     {
         // Substitution
@@ -207,6 +209,7 @@ unsigned const & seqLength)
             {
                 appendValue(variants, fastaID[i]);
                 appendValue(variants, ',');
+                startFound = true;
             }
         }
         // Insertion
@@ -221,6 +224,12 @@ unsigned const & seqLength)
             {
                 appendValue(variants, fastaID[i]);
                 appendValue(variants, ',');
+                startFound = true;
+            }
+            else
+            {
+                if (!startFound)
+                    count -= (length(fastaID[i + 2]) - length(fastaID[i + 1]));
             }
         }
         // Deletion
@@ -235,18 +244,21 @@ unsigned const & seqLength)
             {
                 appendValue(variants, fastaID[i]);
                 appendValue(variants, ',');
+                startFound = true;
+            }
+            else
+            {
+                if (!startFound)
+                    count += (length(fastaID[i + 1]) - length(fastaID[i + 2]));
             }
         }
     }
 
+    offTargetPos += count;
     if (length(variants) > 3)
     {
         CharString combinedVariants = concat(variants);
         snpType = prefix(concat(variants), length(combinedVariants) - 1);
-    }
-    else
-    {
-        snpType = "VAR";
     }
 }
 
@@ -281,13 +293,13 @@ unsigned const & seqLength)
         offTargets[i].chr = fastaID[0];
         offTargets[i].pos = offTargets[i].pos + std::atoi(toCString(fastaID[1]));
 
+        getSnpType(offTargets[i].snpType, fastaID, offTargets[i].pos, seqLength);
+
         // Check if on-target
         if (comp(offTargets[i], onTargets.at(offTargets[i].target)))
         {
             valid = false;
         }
-
-        getSnpType(offTargets[i].snpType, fastaID, offTargets[i].pos, seqLength);
 
         // Delete duplicate entries (must be adjacent as entries are sorted)
         // Might happen if off-target lies in REF-only region of 2 variant sequences
