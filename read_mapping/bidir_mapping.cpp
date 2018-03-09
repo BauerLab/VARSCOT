@@ -5,27 +5,10 @@
 #include <seqan/seeds.h>
 #include <seqan/seq_io.h>
 
-#include "helper.h"
-#include "searchSchemes.h"
+#include "common.h"
 
 using namespace std;
 using namespace seqan;
-
-namespace seqan {
-
-template <typename TChar, typename TOwner>
-struct SAValue<StringSet<String<TChar>, TOwner > >
-{
-    typedef Pair<uint32_t, uint32_t> Type;
-};
-
-template <typename TChar, typename TOwner>
-struct SAValue<String<TChar, TOwner > >
-{
-    typedef uint32_t Type;
-};
-
-};
 
 typedef Pair<uint16_t, uint32_t> TOccType;
 
@@ -39,11 +22,7 @@ template <typename TIndex, typename TMap>
 void searchAndVerify(TIndex & index, CharString const & id, DnaString const & fullRead, DnaString const & partialRead, bool const reverseStrand, bool const firstHalf,
       TMap & records, unsigned const maxMismatches)
 {
-    auto scheme = schemes[maxMismatches/2]; // <= 3 errors je Hälfte
-    typedef Iter<TIndex, VSTree<TopDown<> > > TIter;
-    TIter it(index);
-
-    auto delegate = [& index, & id, & fullRead, & partialRead, reverseStrand, firstHalf, & records, & maxMismatches](auto const & it, unsigned const errors
+    auto delegate = [& index, & id, & fullRead, & partialRead, reverseStrand, firstHalf, & records, & maxMismatches](auto const & it, DnaString const & /*needle*/, unsigned const /*errors*/
         #ifdef ENABLE_DEBUG_MACRO
             , string str
         #endif
@@ -92,7 +71,7 @@ void searchAndVerify(TIndex & index, CharString const & id, DnaString const & fu
             for (unsigned i = 0; i < length(fullRead) && mismatches <= maxMismatches; ++i)
             {
                 if (ordEqual(chromosome[posInChromosome + i], Dna5('N')))
-                    mismatches += (maxMismatches + 1); // make alignment "invalid"
+                    mismatches += maxMismatches + 1; // make alignment "invalid"
                 mismatches += !ordEqual(fullRead[i], chromosome[posInChromosome + i]);
             }
             if (mismatches > maxMismatches)
@@ -107,9 +86,7 @@ void searchAndVerify(TIndex & index, CharString const & id, DnaString const & fu
             // 272 if reverse strand and secondary alignment
             // 272 if reverse strand and secondary alignment
             if (reverseStrand)
-            {
                 record.r.flag = BAM_FLAG_RC;
-            }
             record.r.rID = chromosomeId;
             record.r.beginPos = posInChromosome;
             record.r.mapQ = 255;
@@ -119,9 +96,7 @@ void searchAndVerify(TIndex & index, CharString const & id, DnaString const & fu
             record.r.tLen = BamAlignmentRecord::INVALID_LEN;
             record.r.seq = fullRead;
             if (reverseStrand)
-            {
                 reverseComplement(record.r.seq);
-            }
             record.r.qual = "IIIIIIIIIIIIIIIIIIIIIII";
 
             // Sara: Added NM and MD tag
@@ -144,12 +119,25 @@ void searchAndVerify(TIndex & index, CharString const & id, DnaString const & fu
         }
     };
 
-    computeBlocklength<typename Value<DnaString>::Type>(scheme, length(partialRead), false /* optimalBlocklength */);
-    for (Search const & s : scheme)
+    switch (maxMismatches)
     {
-        goRoot(it);
-        search(delegate, it, partialRead, s, false /*indels*/, false /*debug*/);
+        case 0: case 1:
+            find<0, 0>(delegate, index, partialRead, HammingDistance());
+            break;
+        case 2: case 3:
+            find<0, 1>(delegate, index, partialRead, HammingDistance());
+            break;
+        case 4: case 5:
+            find<0, 2>(delegate, index, partialRead, HammingDistance());
+            break;
+        case 6: case 7:
+            find<0, 3>(delegate, index, partialRead, HammingDistance());
+            break;
+        case 8:
+            find<0, 4>(delegate, index, partialRead, HammingDistance());
+            break;
     }
+
 }
 
 template <typename TIndex, typename TContext>
@@ -199,24 +187,24 @@ int main(int argc, char *argv[])
     addDescription(parser, "App for benchmarking the running time of search schemes. Only supports Dna4 so far (everything else than ACGT will be converted to A). All reads must have the same length.");
 
     addOption(parser, ArgParseOption("G", "genome", "Path to genome fasta file", ArgParseArgument::INPUT_FILE, "IN"));
-  	setValidValues(parser, "genome", "fa fasta");
+    setValidValues(parser, "genome", "fa fasta");
     setRequired(parser, "genome");
 
     addOption(parser, ArgParseOption("I", "index", "Path to the indexed genome", ArgParseArgument::INPUT_FILE, "IN"));
     setRequired(parser, "index");
 
-    addOption(parser, ArgParseOption("R", "reads", "Path to the reads", ArgParseArgument::INPUT_FILE, "IN"));
-  	setValidValues(parser, "reads", "fa fasta");
-  	setRequired(parser, "reads");
+    addOption(parser, ArgParseOption("R", "reads", "Path to the reads (have to be Dna4)", ArgParseArgument::INPUT_FILE, "IN"));
+    setValidValues(parser, "reads", "fa fasta");
+    setRequired(parser, "reads");
 
     addOption(parser, ArgParseOption("M", "mismatches", "Number of allowed mismatches", ArgParseArgument::INTEGER, "INT"));
-  	setRequired(parser, "mismatches");
+    setRequired(parser, "mismatches");
 
-  	addOption(parser, ArgParseOption("T", "threads", "Number of threads", ArgParseArgument::INTEGER, "INT"));
-  	setRequired(parser, "threads"); // TODO: Necessary? How to set a default value?
+    addOption(parser, ArgParseOption("T", "threads", "Number of threads", ArgParseArgument::INTEGER, "INT"));
+    setDefaultValue(parser, "threads", "1");
 
     addOption(parser, ArgParseOption("O", "output", "Path to output SAM file", ArgParseArgument::OUTPUT_FILE, "OUT"));
-  	setValidValues(parser, "output", "sam bam");
+    setValidValues(parser, "output", "sam bam");
 
     ArgumentParser::ParseResult res = parse(parser, argc, argv);
     if (res != ArgumentParser::PARSE_OK)
@@ -234,7 +222,7 @@ int main(int argc, char *argv[])
 
 	if (mismatches < 0 || mismatches > 8)
 	{
-		std::cerr << "Error: Maximum number of mismatches must lie between 0 and 8." << std::endl;
+		cerr << "Error: Maximum number of mismatches must lie between 0 and 8." << endl;
 		return 1;
 	}
 
@@ -246,7 +234,7 @@ int main(int argc, char *argv[])
     TIndex index;
     StringSet<CharString> ids;
     StringSet<DnaString> reads;
-    std::vector<String<char> > output_buffer;
+    vector<String<char> > output_buffer;
     output_buffer.resize(threads);
     StringSet<CharString> contigNameStore;
 
@@ -254,11 +242,11 @@ int main(int argc, char *argv[])
     // TODO: throw errror when Dna5String
     SeqFileIn seqFileIn(toCString(readsPath));
     readRecords(ids, reads, seqFileIn);
-    // cout << "Reads loaded (total: " << length(reads) << ")." << endl;
+    cout << "Reads loaded (total: " << length(reads) << ")." << endl;
 
     // Open index
     open(index, toCString(indexPath));
-    // cout << "Index loaded." << endl;
+    cout << "Index loaded." << endl;
 
     // Read ids from genome fasta: TODO improve
     SeqFileIn genomeFileIn(toCString(genomePath));
@@ -273,13 +261,11 @@ int main(int argc, char *argv[])
 
     NameStoreCache<StringSet<CharString> > contigNameStoreCache(contigNameStore);
     BamIOContext<StringSet<CharString> > bamIOContext(contigNameStore, contigNameStoreCache);
-	// cout << output_buffer.size() << endl;
 
-	omp_set_num_threads(threads);
-	#pragma omp parallel for schedule(static)
+    omp_set_num_threads(threads);
+    #pragma omp parallel for
     for (unsigned i = 0; i < length(reads); ++i)
     {
-		// printf("thread id: %i\n", omp_get_thread_num());
         DnaString read(infix(reads[i], 0, length(reads[i])));
         // Search & verify reads
         searchAndVerifyEntireRead(index, ids[i], read, false, bamIOContext, output_buffer[omp_get_thread_num()], mismatches);
@@ -289,20 +275,18 @@ int main(int argc, char *argv[])
     }
 
     // TODO: SeqAn SAM/BAM IO?
-    std::ofstream out;
+    ofstream out;
     out.open(toCString(outputPath));
 
-    if (out.is_open())
+    if (!out.is_open())
     {
-        for (auto i : output_buffer)
-            out << i;
-        out.close();
-    }
-    else
-    {
-        std::cerr << "ERROR: Could not open output path." << std::endl;
+        cerr << "ERROR: Could not open output path." << endl;
 		return 1;
     }
+
+    for (auto i : output_buffer)
+        out << i;
+    out.close();
 
     return 0;
 }
