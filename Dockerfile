@@ -38,10 +38,7 @@ RUN mkdir -p /app/lib
 # Install Seqan
 # https://github.com/seqan/seqan/tree/seqan-v2.3.2
 WORKDIR /app/lib
-RUN git clone https://github.com/seqan/seqan.git
-WORKDIR /app/lib/seqan
-RUN git checkout develop
-RUN git checkout d7a4805454dd2183e34a7e2c776485ce4ada8732
+RUN git clone --branch seqan-v2.4.0rc2 --depth 1 https://github.com/seqan/seqan.git
 
 # Install TUSCAN
 # https://github.com/BauerLab/TUSCAN/tree/master/TUSCAN%20model
