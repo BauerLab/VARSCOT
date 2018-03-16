@@ -20,10 +20,7 @@ However, to install VARSCOT manually, the ```Dockerfile``` can be consulted for 
 * mkdir $APP/lib
 * cd $APP/lib
 * Install Seqan
-	* git clone https://github.com/seqan/seqan.git
-	* cd $APP/lib/seqan
-	* git checkout develop
-    * git checkout d7a4805454dd2183e34a7e2c776485ce4ada8732
+	* git clone --branch seqan-v2.4.0rc2 --depth 1 https://github.com/seqan/seqan.git
 * Install TUSCAN
 	* cd $APP/lib
     * wget --no-verbose https://github.com/BauerLab/TUSCAN/archive/master.zip -O tuscan-master.zip
@@ -40,7 +37,7 @@ However, to install VARSCOT manually, the ```Dockerfile``` can be consulted for 
 	* cmake ../../variant_processing -DCMAKE_BUILD_TYPE=Release
 	* make
 
-The next section describes usage how to use VARSCOT having installed it.
+The next section describes how to use VARSCOT having installed it.
 
 ## Usage
 
