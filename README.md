@@ -42,7 +42,7 @@ The next section describes how to use VARSCOT having installed it.
 ## Usage
 
 Please note that for the user-defined reference genome already a corresponding index must be present.
-To build the classifier run:
+To build the index run:
 
 ```
 $ ./build/read_mapping_build/bidir_index -G /path/to/ref/genome.fa -I /path/to/index/prefix
