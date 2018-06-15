@@ -1,4 +1,5 @@
-#! Variant-aware scoring of off-targets for CRISPR Genome Engineering (VARSCOT)
+Variant-aware scoring of off-targets for CRISPR Genome Engineering (VARSCOT)
+---
 
 This repository contains the stand-along VARSCOT pipeline as well as the workflows used to construct the model.
 
