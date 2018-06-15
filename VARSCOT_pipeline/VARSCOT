@@ -1,0 +1,389 @@
+#!/bin/bash
+# Pipeline:
+# 1) Reads in a VCF file, extracts SNP genome and writes it to fasta file
+# 2) Maps reads against reference and SNP genome
+# 3) Merges results of both mappings
+#
+# Input of the pipeline: -f,   --vcf               path to input variant file (.vcf)
+#                        -s,   --sample            column index of the sample in VCF file to use (0-based, default 0)
+#                        -b,   --bed               path to ontarget file (.bed, must be a bed6 file)
+#                        -o,   --output            path to output file (.txt)
+#                        -g,   --genome            path to reference genome (.fa/.fasta)
+#                        -i,   --index             path to bidirectional index
+#                        -m,   --mismatch          maximum number of mismatches (default 6)
+#                        -t,   --threads           number of threads to use (default 8)
+#                        -e,   --evaluation        either 'mit', 'class' or 'prob' (default 'mit')
+#                        -v,   --verbose           keep all temp files
+# All arguments are required except for the vcf file
+cd $(dirname $0)
+
+# Test if input arguments exist.
+if [ $# -eq 0 ]
+  then
+    echo "Error: No arguments supplied. See -h option for correct usage."
+    exit 2
+fi
+
+while [[ $# -ge 1 ]]
+do
+key="$1"
+
+case $key in
+    -f|--vcf)
+    VCFPATH=`readlink -f $2`
+    shift
+    ;;
+    -s|--sample)
+    SAMPLE="$2"
+    shift # past argument
+    ;;
+    -b|--bed)
+    TARGETPATH=`readlink -f $2`
+    shift
+    ;;
+    -o|--output)
+    OUTPUTPATH=`readlink -f $2`
+    shift
+    ;;
+    -g|--genome)
+    GENOMEPATH=`readlink -f $2`
+    shift
+    ;;
+    -i|--index)
+    INDEXPATH=`readlink -f $2`
+    shift
+    ;;
+    -m|--mismatch)
+    MISMATCH="$2"
+    shift
+    ;;
+    -t|--threads)
+    THREADS="$2"
+    shift
+    ;;
+    -e|--evaluation)
+    EVALUATION="$2"
+    shift
+    ;;
+    -v|--verbose)
+    VERBOSE=0
+    ;;
+    -h| --help)
+    echo "$(basename "$0") [ARGUMENTS]
+
+    Arguments:
+    -f,  --vcf               path to input variant file (.vcf)
+    -s,  --sample            column index of the sample in VCF file to use (0-based, default 0)
+    -b,  --bed               path to ontarget file (.bed, must be a bed6 file)
+    -o,  --output            path to output file (.txt)
+    -g,  --genome            path to reference genome (.fa/.fasta)
+    -i,  --index             path to bidirectional index with index prefix
+    -m,  --mismatch          maximum number of mismatches (default 6)
+    -t,  --threads           number of threads to use (default 8)
+    -e,  --evaluation        either 'mit', 'class' or 'prob' (default 'mit')
+    -v,  --verbose           keep all temp files"
+
+    exit 0
+    ;;
+    *)
+    echo "$(basename "$0") [ARGUMENTS]
+
+    Arguments:
+    -f,  --vcf               path to input variant file (.vcf)
+    -s,  --sample            column index of the sample in VCF file to use (0-based, default 0)
+    -b,  --bed               path to ontarget file (.bed, must be a bed6 file)
+    -o,  --output            path to output file (.txt)
+    -g,  --genome            path to reference genome (.fa/.fasta)
+    -i,  --index             path to bidirectional index with index prefix
+    -m,  --mismatch          maximum number of mismatches (default 6)
+    -t,  --threads           number of threads to use (default 8)
+    -e,  --evaluation        either 'mit', 'class' or 'prob' (default 'mit')
+    -v,  --verbose           keep all temp files"
+    exit 0
+esac
+shift
+done
+
+# CREATE TEMP DIRECTORY THAT IS REMOVED IN THE END
+# Files as bam file, SNP genome, etc are written into this directory
+TEMPDIR="temp_files"
+
+if [ ! -d "${TEMPDIR}" ]
+  then
+    mkdir "${TEMPDIR}"
+else
+    rm -rf "${TEMPDIR}"
+    mkdir "${TEMPDIR}"
+fi
+
+
+# Trap for exit or termination of the program. Removes temp folder. Not applied when verbose is TRUE.
+if [ -z "${VERBOSE}" ]
+  then
+    trap "rm -rf ${TEMPDIR}; exit 255;" EXIT SIGINT SIGKILL SIGTERM SIGSTOP
+fi
+
+
+echo "Starting analysis ..."
+# Set variable for pipeline run with or without SNP information
+# Test if all arguments are supplied
+SNPVERSION=0
+if [ -z "${VCFPATH}" ]
+  then
+    SNPVERSION=1
+    echo "Warning: No VCF file supplied. Running analysis without variant information."
+fi
+
+if [ -z "${SAMPLE}" ] && [ $SNPVERSION == 0 ]
+  then
+    SAMPLE=0
+    echo "Warning: No sample information provided. First sample is chosen by default."
+fi
+
+if [ -z "${TARGETPATH}" ]
+  then
+    echo "Error: No on-target file path (.bed) supplied. See -h option for correct usage."
+    exit 2
+fi
+
+if [ -z "${OUTPUTPATH}" ]
+  then
+    echo "Error: No output file path (.txt) supplied. See -h option for correct usage."
+    exit 2
+fi
+
+if [ -z "${GENOMEPATH}" ]
+  then
+    echo "Error: No genome (reference) path supplied. See -h option for correct usage."
+    exit 2
+fi
+
+if [ -z "${INDEXPATH}" ]
+  then
+    echo "Error: No path to bidirectional index supplied. See -h option for correct usage."
+    exit 2
+fi
+
+if [ -z "${MISMATCH}" ]
+  then
+    MISMATCH=8
+    echo "Warning: No maximum number of mismatches specified. 8 is chosen by default."
+elif (( $MISMATCH > 8 )) || (( $MISMATCH < 0 ))
+  then
+    echo "Error: Maximum number of mismatches must lie between 0 and 8."
+    exit 2
+fi
+
+if [ -z "${THREADS}" ]
+  then
+    THREADS=8
+fi
+
+if [ -z "${EVALUATION}" ]
+  then
+    EVALUATION="mit"
+elif [ "${EVALUATION}" != "class" ] && [ "${EVALUATION}" != "prob" ] && [ "${EVALUATION}" != "mit" ]
+  then
+    echo "Error: Incorrect usage of -e option. Choose from 'mit', 'class' or 'prob'."
+    exit 2
+fi
+
+# Check vcf file
+if [ $SNPVERSION == 0 ]
+  then
+    VCFEXTENSION="${VCFPATH##*.}"
+    if [ "$VCFEXTENSION" != "vcf" ]
+      then
+        echo "Error: The given variant file cannot be processed. Please provide a '.vcf' file."
+        exit 2
+    fi
+fi
+
+# Check on-target file
+TARGETPREFIX=`basename ${TARGETPATH%.*}`
+TARGETEXTENSION="${TARGETPATH##*.}"
+if [ "$TARGETEXTENSION" != "bed" ]
+  then
+    echo "Error: The given on-target file cannot be processed. Please provide a '.bed' file."
+    exit 2
+fi
+
+# Extract output prefix
+OUTPUTDIR=`dirname ${OUTPUTPATH%.*}`
+OUTPUTPREFIX=`basename ${OUTPUTPATH%.*}`
+OUTPUTEXTENSION="${OUTPUTPATH##*.}"
+
+if [ "$OUTPUTEXTENSION" != "txt" ]
+  then
+    echo "Warning: Given output file is not a .txt file and will be changed automatically."
+fi
+
+# Check genome file
+GENOMEEXTENSION="${GENOMEPATH##*.}"
+if [ "$GENOMEEXTENSION" != "fa" ] && [ "$GENOMEEXTENSION" != "fasta" ]
+  then
+    echo "Error: The given reference genome file cannot be processed. Please provide a '.fa' or '.fasta' file."
+    exit 2
+fi
+
+
+# Define sequence length - always 23 in this analysis
+SEQLENGTH=23
+TUSCANPATH="lib/TUSCAN/TUSCAN model"
+
+# CREATE FASTA FILES OF ON-TARGETS
+build/variant_processing_build/fasta_writer "${TEMPDIR}/${TARGETPREFIX}.fa" "${TEMPDIR}/${TARGETPREFIX}_flanking.fa" "$TARGETPATH" "$GENOMEPATH"
+# Catch exit code of fasta writer
+rc=$?
+if [[ $rc != 0 ]]
+  then
+    exit $rc
+fi
+
+# TUSCAN REGRESSION FOR ON-TARGET ACTIVITY
+echo "Measuring on-target activity"
+echo
+python "${TUSCANPATH}/TUSCAN.py" -i "${TEMPDIR}/${TARGETPREFIX}_flanking.fa" -o "${TEMPDIR}/${TARGETPREFIX}_activity.txt" -m Regression -t fa
+# Catch exit code of TUSCAN
+rc=$?
+if [[ $rc != 0 ]]
+  then
+    exit $rc
+fi
+
+echo
+# VCF LOADER
+if [ $SNPVERSION == 0 ]
+  then
+    echo "Processing VCF file"
+    build/variant_processing_build/vcf_loader "$VCFPATH" "${TEMPDIR}/${OUTPUTPREFIX}.fa" "$GENOMEPATH" "$SAMPLE" "$SEQLENGTH" "$THREADS" >/dev/null
+    # Catch exit code of vcf loader
+    rc=$?
+    if [[ $rc != 0 ]]
+      then
+        exit $rc
+    fi
+    # Check if fasta file was created and is not empty
+    if [ -f "${TEMPDIR}/${OUTPUTPREFIX}.fa" ]
+      then
+        if [ -s "${TEMPDIR}/${OUTPUTPREFIX}.fa" ]
+          then
+            echo "SNP genome successfully built"
+            echo
+        else
+            echo "Error: SNP genome is empty"
+        fi
+    else
+        echo "Error: SNP genome does not exist"
+    fi
+fi
+
+
+# READ MAPPING
+ref_mapping()
+{
+    build/read_mapping_build/bidir_mapping -G "${GENOMEPATH}" -I "${INDEXPATH}" -R "${TEMPDIR}/${TARGETPREFIX}.fa" -M "$MISMATCH" -T "$THREADS" -O "${TEMPDIR}/${OUTPUTPREFIX}_reference.sam"
+
+    # Catch exit code of read mapping
+    rc=$?
+    if [[ $rc != 0 ]]
+      then
+        exit $rc
+    fi
+}
+
+snp_mapping()
+{
+    mkdir "${TEMPDIR}/snp-index"
+    SNPINDEXPATH="${TEMPDIR}/snp-index/${OUTPUTPREFIX}"
+    build/read_mapping_build/bidir_index -G "${TEMPDIR}/${OUTPUTPREFIX}.fa" -I "${SNPINDEXPATH}"
+    build/read_mapping_build/bidir_mapping -G "${TEMPDIR}/${OUTPUTPREFIX}.fa" -I "${SNPINDEXPATH}" -R "${TEMPDIR}/${TARGETPREFIX}.fa" -M "$MISMATCH" -T "$THREADS" -O "${TEMPDIR}/${OUTPUTPREFIX}_snp.sam"
+
+    # Catch exit code of read mapping
+    rc=$?
+    if [[ $rc != 0 ]]
+      then
+        exit $rc
+    fi
+}
+
+echo "Mapping on-targets"
+if [ $SNPVERSION == 0 ]
+  then
+    ref_mapping &
+    snp_mapping &
+    wait
+else
+    ref_mapping
+fi
+
+echo "Mapping completed"
+echo
+
+# MERGE BAM FILES AND CREATE OUTPUT
+echo "Merging results"
+echo
+if [ $SNPVERSION == 0 ] && [ "${EVALUATION}" == "mit" ]
+  then
+    build/variant_processing_build/bam_merger "${OUTPUTPATH}" "${OUTPUTDIR}/${OUTPUTPREFIX}_feature_matrix.txt" "${TEMPDIR}/${OUTPUTPREFIX}_reference.sam" "${TEMPDIR}/${OUTPUTPREFIX}_snp.sam" "$TARGETPATH" "$GENOMEPATH" "${TEMPDIR}/${OUTPUTPREFIX}.fa" "${TEMPDIR}/${TARGETPREFIX}_activity.txt" "$MISMATCH" "$SEQLENGTH" "$THREADS" 0 >/dev/null
+    # Catch exit code of bam merger
+    rc=$?
+    if [[ $rc != 0 ]]
+      then
+        exit $rc
+    fi
+elif [ $SNPVERSION == 0 ] && [ "${EVALUATION}" != "mit" ]
+  then
+    build/variant_processing_build/bam_merger "${OUTPUTPATH}" "${OUTPUTDIR}/${OUTPUTPREFIX}_feature_matrix.txt" "${TEMPDIR}/${OUTPUTPREFIX}_reference.sam" "${TEMPDIR}/${OUTPUTPREFIX}_snp.sam" "$TARGETPATH" "$GENOMEPATH" "${TEMPDIR}/${OUTPUTPREFIX}.fa" "${TEMPDIR}/${TARGETPREFIX}_activity.txt"  "$MISMATCH" "$SEQLENGTH" "$THREADS" 1 >/dev/null
+    # Catch exit code of bam merger
+    rc=$?
+    if [[ $rc != 0 ]]
+      then
+        exit $rc
+    fi
+elif [ $SNPVERSION == 1 ] && [ "${EVALUATION}" == "mit" ]
+  then
+    build/variant_processing_build/bam_merger_ref_only "${OUTPUTPATH}" "${OUTPUTDIR}/${OUTPUTPREFIX}_feature_matrix.txt" "${TEMPDIR}/${OUTPUTPREFIX}_reference.sam" "$TARGETPATH" "$GENOMEPATH" "${TEMPDIR}/${TARGETPREFIX}_activity.txt" "$MISMATCH" "$SEQLENGTH" 0 >/dev/null
+     # Catch exit code of bam merger
+    rc=$?
+    if [[ $rc != 0 ]]
+      then
+        exit $rc
+    fi
+else
+    build/variant_processing_build/bam_merger_ref_only "${OUTPUTPATH}" "${OUTPUTDIR}/${OUTPUTPREFIX}_feature_matrix.txt" "${TEMPDIR}/${OUTPUTPREFIX}_reference.sam" "$TARGETPATH" "$GENOMEPATH" "${TEMPDIR}/${TARGETPREFIX}_activity.txt" "$MISMATCH" "$SEQLENGTH" 1 >/dev/null
+    # Catch exit code of bam merger
+    rc=$?
+    if [[ $rc != 0 ]]
+      then
+        exit $rc
+    fi
+fi
+
+if [ "${EVALUATION}" == "class" ]
+  then
+    Rscript classification/classificationPipeline.R  "${OUTPUTPATH}" "${OUTPUTDIR}/${OUTPUTPREFIX}_feature_matrix.txt" FALSE
+    # Catch exit code of Rscript
+    rc=$?
+    if [[ $rc != 0 ]]
+      then
+        exit $rc
+    fi
+elif [ "${EVALUATION}" == "prob" ]
+  then
+    Rscript classification/classificationPipeline.R  "${OUTPUTPATH}" "${OUTPUTDIR}/${OUTPUTPREFIX}_feature_matrix.txt" TRUE
+    # Catch exit code of Rscript
+    rc=$?
+    if [[ $rc != 0 ]]
+      then
+        exit $rc
+    fi
+fi
+
+
+# SORT RESULTS BASED ON OFF-TARGET NAME
+head -n 1 "${OUTPUTPATH}" > "${OUTPUTPREFIX}_temp.txt" &&
+tail -n +2 "${OUTPUTPATH}" | sort -t$'\t' -k4,4 >> "${OUTPUTPREFIX}_temp.txt"
+mv "${OUTPUTPREFIX}_temp.txt" "${OUTPUTPATH}"
+
+echo "Analysis finished"
