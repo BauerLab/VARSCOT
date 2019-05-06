@@ -18,11 +18,20 @@ struct BamRecord
     unsigned mismatches;
 };
 
-template <typename TIndex, typename TMap>
-void searchAndVerify(TIndex & index, CharString const & id, DnaString const & fullRead, DnaString const & partialRead, bool const reverseStrand, bool const firstHalf,
-      TMap & records, unsigned const maxMismatches)
+bool isValidPAM(Dna5String const & pam, std::vector<Dna5String> const & validPAM)
 {
-    auto delegate = [& index, & id, & fullRead, & partialRead, reverseStrand, firstHalf, & records, & maxMismatches](auto const & it, DnaString const & /*needle*/, unsigned const /*errors*/
+    for (auto pamF : validPAM)
+    {
+        if (pam == pamF)
+            return true;
+    }
+    return false;
+}
+
+template <typename TIndex, typename TMap>
+void searchAndVerify(TIndex & index, CharString const & id, DnaString const & fullRead, DnaString const & partialRead, bool const reverseStrand, bool const firstHalf, TMap & records, unsigned const maxMismatches, std::vector<Dna5String> const & validForwardPAM, std::vector<Dna5String> const & validReversePAM)
+{
+    auto delegate = [& index, & id, & fullRead, & partialRead, reverseStrand, firstHalf, & records, & maxMismatches, & validForwardPAM, & validReversePAM](auto const & it, DnaString const & /*needle*/, unsigned const /*errors*/
         #ifdef ENABLE_DEBUG_MACRO
             , string str
         #endif
@@ -58,16 +67,15 @@ void searchAndVerify(TIndex & index, CharString const & id, DnaString const & fu
             mappedRegion = infixWithLength(chromosome, posInChromosome, length(fullRead));
             //cout << "Mapped Region in Genome: " << mappedRegion << endl;
 
-            // does it end with GG?
-            if (!reverseStrand && suffix(mappedRegion, length(mappedRegion) - 2) != Dna5String("GG") && suffix(mappedRegion, length(mappedRegion) - 2) != Dna5String("GA"))
+            // does it end with GG or any other allowed PAM?
+            if (!reverseStrand && !isValidPAM(suffix(mappedRegion, length(mappedRegion) - 2), validForwardPAM))
                 continue;
 
-            // does it start with CC?
-            if (reverseStrand && prefix(mappedRegion, 2) != Dna5String("CC") && prefix(mappedRegion, 2) != Dna5String("TC"))
+            // does it start with CC or any other allowed PAM reverse?
+            if (reverseStrand && !isValidPAM(prefix(mappedRegion, 2), validReversePAM))
                 continue;
 
             // at most 8 mismatches?
-            // Sara: Wenn ich eine Haelfte mit 3 und eine Haelfte mit 5 Fehlern suche, dann kriege ich nicht die Ergebnisse die 4 msimatches in jedem Teil haben oder?
             for (unsigned i = 0; i < length(fullRead) && mismatches <= maxMismatches; ++i)
             {
                 if (ordEqual(chromosome[posInChromosome + i], Dna5('N')))
@@ -79,6 +87,7 @@ void searchAndVerify(TIndex & index, CharString const & id, DnaString const & fu
 
             BamRecord record;
             record.r.qName = id;
+
             // We will get 4 different flag values in the end
             // 0 if forward strand and best match
             // 16 if reverse strand and best match
@@ -99,8 +108,6 @@ void searchAndVerify(TIndex & index, CharString const & id, DnaString const & fu
                 reverseComplement(record.r.seq);
             record.r.qual = "IIIIIIIIIIIIIIIIIIIIIII";
 
-            // Sara: Added NM and MD tag
-            // Sara: For MD string we need Gap Objects - This is an ugly fix by converting them to align - better idea?
             CharString rawTagsText;
             BamTagsDict tagsDict(rawTagsText);
 
@@ -141,18 +148,18 @@ void searchAndVerify(TIndex & index, CharString const & id, DnaString const & fu
 }
 
 template <typename TIndex, typename TContext>
-void searchAndVerifyEntireRead(TIndex & index, CharString const & id, DnaString const & read, bool const reverseStrand,
-      TContext const & bamIOContext, String<char> & buffer, unsigned const mismatches)
+void searchAndVerifyEntireRead(TIndex & index, CharString const & id, DnaString const & read, bool const reverseStrand, TContext const & bamIOContext,
+String<char> & buffer, unsigned const mismatches, std::vector<Dna5String> const & validForwardPAM, std::vector<Dna5String> const & validReversePAM)
 {
     map<TOccType, BamRecord> records;
 
     // erste Hälfte
     DnaString firstHalf(infix(read, 0, length(read)/2));
-    searchAndVerify(index, id, read, firstHalf, reverseStrand, true, records, mismatches);
+    searchAndVerify(index, id, read, firstHalf, reverseStrand, true, records, mismatches, validForwardPAM, validReversePAM);
 
     // zweite Hälfte
     DnaString secondHalf(infix(read, length(read)/2, length(read)));
-    searchAndVerify(index, id, read, secondHalf, reverseStrand, false, records, mismatches);
+    searchAndVerify(index, id, read, secondHalf, reverseStrand, false, records, mismatches, validForwardPAM, validReversePAM);
 
     if (records.empty())
         return;
@@ -183,8 +190,8 @@ void searchAndVerifyEntireRead(TIndex & index, CharString const & id, DnaString 
 int main(int argc, char *argv[])
 {
     // Argument parser
-    ArgumentParser parser("SearchSchemes - Benchmarking");
-    addDescription(parser, "App for benchmarking the running time of search schemes. Only supports Dna4 so far (everything else than ACGT will be converted to A). All reads must have the same length.");
+    ArgumentParser parser("Read mapping");
+    addDescription(parser, "Read mapper for CRISPR-Cas9 off-targets with a bidirectional FM index. Only supports Dna4 so far (everything else than ACGT will be converted to A). All reads must have the same length.");
 
     addOption(parser, ArgParseOption("G", "genome", "Path to genome fasta file", ArgParseArgument::INPUT_FILE, "IN"));
     setValidValues(parser, "genome", "fa fasta");
@@ -206,6 +213,8 @@ int main(int argc, char *argv[])
     addOption(parser, ArgParseOption("O", "output", "Path to output SAM file", ArgParseArgument::OUTPUT_FILE, "OUT"));
     setValidValues(parser, "output", "sam bam");
 
+    addOption(parser, ArgParseOption("P", "pam", "Additional non-canonical PAM that should be allowed for off-target search besides (N)GG and (N)GA (default).", seqan::ArgParseArgument::STRING, "STR"));
+
     ArgumentParser::ParseResult res = parse(parser, argc, argv);
     if (res != ArgumentParser::PARSE_OK)
         return res == ArgumentParser::PARSE_ERROR;
@@ -213,18 +222,29 @@ int main(int argc, char *argv[])
     // Retrieve input parameters
     unsigned mismatches, threads;
     CharString genomePath, indexPath, readsPath, outputPath;
+    Dna5String additionalPAM;
     getOptionValue(genomePath, parser, "genome");
     getOptionValue(indexPath, parser, "index");
     getOptionValue(readsPath, parser, "reads");
     getOptionValue(mismatches, parser, "mismatches");
     getOptionValue(threads, parser, "threads");
     getOptionValue(outputPath, parser, "output");
+    getOptionValue(additionalPAM, parser, "pam");
 
 	if (mismatches < 0 || mismatches > 8)
 	{
 		cerr << "Error: Maximum number of mismatches must lie between 0 and 8." << endl;
 		return 1;
 	}
+
+    std::vector<Dna5String> validForwardPAM{"GG", "GA"};
+    std::vector<Dna5String> validReversePAM{"CC", "TC"};
+    if (additionalPAM != "")
+    {
+        validForwardPAM.push_back(additionalPAM);
+        reverseComplement(additionalPAM);
+        validReversePAM.push_back(additionalPAM);
+    }
 
     // Index configuration
     typedef StringSet<Dna5String, Owner<ConcatDirect<> > > TText;
@@ -268,10 +288,10 @@ int main(int argc, char *argv[])
     {
         DnaString read(infix(reads[i], 0, length(reads[i])));
         // Search & verify reads
-        searchAndVerifyEntireRead(index, ids[i], read, false, bamIOContext, output_buffer[omp_get_thread_num()], mismatches);
+        searchAndVerifyEntireRead(index, ids[i], read, false, bamIOContext, output_buffer[omp_get_thread_num()], mismatches, validForwardPAM, validReversePAM);
         // Search & verify reverse strand!
         reverseComplement(read);
-        searchAndVerifyEntireRead(index, ids[i], read, true, bamIOContext, output_buffer[omp_get_thread_num()], mismatches);
+        searchAndVerifyEntireRead(index, ids[i], read, true, bamIOContext, output_buffer[omp_get_thread_num()], mismatches, validForwardPAM, validReversePAM);
     }
 
     // TODO: SeqAn SAM/BAM IO?

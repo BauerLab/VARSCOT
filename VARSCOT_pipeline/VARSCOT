@@ -12,6 +12,7 @@
 #                        -i,   --index             path to bidirectional index
 #                        -m,   --mismatch          maximum number of mismatches (default 6)
 #                        -t,   --threads           number of threads to use (default 8)
+#                        -p,   --pam               additional non-canonical PAM that should be allowed for off-target search besides (N)GG and (N)GA (default)
 #                        -e,   --evaluation        either 'mit', 'class' or 'prob' (default 'mit')
 #                        -v,   --verbose           keep all temp files
 # All arguments are required except for the vcf file
@@ -61,6 +62,10 @@ case $key in
     THREADS="$2"
     shift
     ;;
+    -p|--pam)
+    PAM="$2"
+    shift
+    ;;
     -e|--evaluation)
     EVALUATION="$2"
     shift
@@ -80,6 +85,7 @@ case $key in
     -i,  --index             path to bidirectional index with index prefix
     -m,  --mismatch          maximum number of mismatches (default 6)
     -t,  --threads           number of threads to use (default 8)
+    -p,  --pam               additional non-canonical PAM that should be allowed for off-target search besides (N)GG and (N)GA (default), provide only two letters (upper case)
     -e,  --evaluation        either 'mit', 'class' or 'prob' (default 'mit')
     -v,  --verbose           keep all temp files"
 
@@ -97,6 +103,7 @@ case $key in
     -i,  --index             path to bidirectional index with index prefix
     -m,  --mismatch          maximum number of mismatches (default 6)
     -t,  --threads           number of threads to use (default 8)
+    -p,  --pam               additional non-canonical PAM that should be allowed for off-target search besides (N)GG and (N)GA (default), provide only two letters (upper case)
     -e,  --evaluation        either 'mit', 'class' or 'prob' (default 'mit')
     -v,  --verbose           keep all temp files"
     exit 0
@@ -177,6 +184,11 @@ fi
 if [ -z "${THREADS}" ]
   then
     THREADS=8
+fi
+
+if [ -z "${PAM}" ]
+  then
+    PAM="none"
 fi
 
 if [ -z "${EVALUATION}" ]
@@ -282,7 +294,13 @@ fi
 # READ MAPPING
 ref_mapping()
 {
-    build/read_mapping_build/bidir_mapping -G "${GENOMEPATH}" -I "${INDEXPATH}" -R "${TEMPDIR}/${TARGETPREFIX}.fa" -M "$MISMATCH" -T "$THREADS" -O "${TEMPDIR}/${OUTPUTPREFIX}_reference.sam"
+    if [ "${PAM}" == "none" ]
+      then
+        build/read_mapping_build/bidir_mapping -G "${GENOMEPATH}" -I "${INDEXPATH}" -R "${TEMPDIR}/${TARGETPREFIX}.fa" -M "$MISMATCH" -T "$THREADS" -O "${TEMPDIR}/${OUTPUTPREFIX}_reference.sam"
+    else
+      then
+        build/read_mapping_build/bidir_mapping -G "${GENOMEPATH}" -I "${INDEXPATH}" -R "${TEMPDIR}/${TARGETPREFIX}.fa" -M "$MISMATCH" -T "$THREADS" -P "$PAM" -O "${TEMPDIR}/${OUTPUTPREFIX}_reference.sam"
+    fi
 
     # Catch exit code of read mapping
     rc=$?
@@ -297,7 +315,14 @@ snp_mapping()
     mkdir "${TEMPDIR}/snp-index"
     SNPINDEXPATH="${TEMPDIR}/snp-index/${OUTPUTPREFIX}"
     build/read_mapping_build/bidir_index -G "${TEMPDIR}/${OUTPUTPREFIX}.fa" -I "${SNPINDEXPATH}"
-    build/read_mapping_build/bidir_mapping -G "${TEMPDIR}/${OUTPUTPREFIX}.fa" -I "${SNPINDEXPATH}" -R "${TEMPDIR}/${TARGETPREFIX}.fa" -M "$MISMATCH" -T "$THREADS" -O "${TEMPDIR}/${OUTPUTPREFIX}_snp.sam"
+
+    if [ "${PAM}" == "none" ]
+      then
+        build/read_mapping_build/bidir_mapping -G "${TEMPDIR}/${OUTPUTPREFIX}.fa" -I "${SNPINDEXPATH}" -R "${TEMPDIR}/${TARGETPREFIX}.fa" -M "$MISMATCH" -T "$THREADS" -O "${TEMPDIR}/${OUTPUTPREFIX}_snp.sam"
+    else
+      then
+        build/read_mapping_build/bidir_mapping -G "${TEMPDIR}/${OUTPUTPREFIX}.fa" -I "${SNPINDEXPATH}" -R "${TEMPDIR}/${TARGETPREFIX}.fa" -M "$MISMATCH" -T "$THREADS" -P "$PAM" -O "${TEMPDIR}/${OUTPUTPREFIX}_snp.sam"
+    fi
 
     # Catch exit code of read mapping
     rc=$?

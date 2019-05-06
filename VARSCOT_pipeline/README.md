@@ -80,6 +80,7 @@ Options: -f,  --vcf               Path to input variant file (.vcf), optional ar
          -m,  --mismatch          Maximum number of mismatches (default 8).
                                   At maximum 8 mismatches can be detected which includes mismatches at the 21. position (N-position of the PAM).
          -t,  --threads           Number of threads to use (default 8).
+         -p,  --pam               Additional non-canonical PAM that should be allowed for off-target search besides (N)GG and (N)GA (default), provide only two letters (upper case, e.g. AG), optional argument
          -e,  --evaluation        Type of activity scoring, either 'mit', 'class' or 'prob' (default 'mit').
                                   The default evaluation returns the MIT score based on 'http://crispr.mit.edu/'.
                                   In addition, a classification by a Random Forest ML model can be chosen.
@@ -137,6 +138,7 @@ Othe than what has already been noted in this section that is specific to Docker
 	    -i,  --index             path to bidirectional index with index prefix
 	    -m,  --mismatch          maximum number of mismatches (default 6)
 	    -t,  --threads           number of threads to use (default 8)
+        -p,  --pam               additional non-canonical PAM that should be allowed for off-target search besides (N)GG and (N)GA (default), provide only two letters (upper case)
 	    -e,  --evaluation        either 'mit', 'class' or 'prob' (default 'mit')
 	    -v,  --verbose           keep all temp files
 
