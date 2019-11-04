@@ -255,6 +255,9 @@ fi
 SEQLENGTH=23
 TUSCANPATH="lib/TUSCAN/TUSCAN model"
 
+# Prevent individual threads from stepping on each other's toes
+export OMP_NUM_THREADS=${THREADS}
+
 # CREATE FASTA FILES OF ON-TARGETS
 build/variant_processing_build/fasta_writer "${TEMPDIR}/${TARGETPREFIX}.fa" "${TEMPDIR}/${TARGETPREFIX}_flanking.fa" "$TARGETPATH" "$GENOMEPATH"
 # Catch exit code of fasta writer
