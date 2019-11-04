@@ -14,6 +14,7 @@ set -Eeuo pipefail
 #                        -m,   --mismatch          maximum number of mismatches (default 6)
 #                        -t,   --threads           number of threads to use (default 8)
 #                        -p,   --pam               additional non-canonical PAM that should be allowed for off-target search besides (N)GG and (N)GA (default)
+#                        -T,   --temp-dir          temporary directory (default temp_files)
 #                        -e,   --evaluation        either 'mit', 'class' or 'prob' (default 'mit')
 #                        -v,   --verbose           keep all temp files
 # All arguments are required except for the vcf file
@@ -55,6 +56,10 @@ case $key in
     INDEXPATH=`readlink -f $2`
     shift
     ;;
+    -T|--temp-dir)
+    TEMPDIR=`readlink -f $2`
+    shift
+    ;;
     -m|--mismatch)
     MISMATCH="$2"
     shift
@@ -87,6 +92,7 @@ case $key in
     -m,  --mismatch          maximum number of mismatches (default 6)
     -t,  --threads           number of threads to use (default 8)
     -p,  --pam               additional non-canonical PAM that should be allowed for off-target search besides (N)GG and (N)GA (default), provide only two letters (upper case)
+    -T,  --temp-dir          temporary directory (default temp_files)
     -e,  --evaluation        either 'mit', 'class' or 'prob' (default 'mit')
     -v,  --verbose           keep all temp files"
 
@@ -105,6 +111,7 @@ case $key in
     -m,  --mismatch          maximum number of mismatches (default 6)
     -t,  --threads           number of threads to use (default 8)
     -p,  --pam               additional non-canonical PAM that should be allowed for off-target search besides (N)GG and (N)GA (default), provide only two letters (upper case)
+    -T,  --temp-dir          temporary directory (default temp_files)
     -e,  --evaluation        either 'mit', 'class' or 'prob' (default 'mit')
     -v,  --verbose           keep all temp files"
     exit 0
@@ -112,9 +119,13 @@ esac
 shift
 done
 
+if [ -z "${TEMPDIR:-}" ]
+then
+    TEMPDIR="temp_files"
+fi
+
 # CREATE TEMP DIRECTORY THAT IS REMOVED IN THE END
 # Files as bam file, SNP genome, etc are written into this directory
-TEMPDIR="temp_files"
 
 if [ ! -d "${TEMPDIR}" ]
   then

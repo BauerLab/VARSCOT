@@ -81,6 +81,7 @@ Options: -f,  --vcf               Path to input variant file (.vcf), optional ar
                                   At maximum 8 mismatches can be detected which includes mismatches at the 21. position (N-position of the PAM).
          -t,  --threads           Number of threads to use (default 8).
          -p,  --pam               Additional non-canonical PAM that should be allowed for off-target search besides (N)GG and (N)GA (default), provide only two letters (upper case, e.g. AG), optional argument
+         -T,  --temp-dir          temporary directory (default temp_files)
          -e,  --evaluation        Type of activity scoring, either 'mit', 'class' or 'prob' (default 'mit').
                                   The default evaluation returns the MIT score based on 'http://crispr.mit.edu/'.
                                   In addition, a classification by a Random Forest ML model can be chosen.
