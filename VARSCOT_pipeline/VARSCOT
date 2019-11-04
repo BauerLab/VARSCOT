@@ -128,7 +128,7 @@ fi
 # Trap for exit or termination of the program. Removes temp folder. Not applied when verbose is TRUE.
 if [ -z "${VERBOSE:-}" ]
   then
-    trap "rm -rf ${TEMPDIR}; exit 255;" EXIT SIGINT SIGKILL SIGTERM SIGSTOP ERR
+    trap "rm -rf ${TEMPDIR}" EXIT SIGINT SIGKILL SIGTERM SIGSTOP ERR
 fi
 
 
