@@ -282,8 +282,11 @@ echo
 # VCF LOADER
 if [ $SNPVERSION == 0 ]
   then
+    echo "Preparing VCF file"
+    SAMPLE_COLUMN=$(expr 10 + $SAMPLE)
+    cut -f 1-9,$SAMPLE_COLUMN  "$VCFPATH" > "${TEMPDIR}/cut.vcf"
     echo "Processing VCF file"
-    build/variant_processing_build/vcf_loader "$VCFPATH" "${TEMPDIR}/${OUTPUTPREFIX}.fa" "$GENOMEPATH" "$SAMPLE" "$SEQLENGTH" "$THREADS" >/dev/null
+    build/variant_processing_build/vcf_loader "${TEMPDIR}/cut.vcf" "${TEMPDIR}/${OUTPUTPREFIX}.fa" "$GENOMEPATH" 0 "$SEQLENGTH" "$THREADS" >/dev/null
     # Catch exit code of vcf loader
     rc=$?
     if [[ $rc != 0 ]]
