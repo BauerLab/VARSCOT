@@ -302,9 +302,11 @@ if [ $SNPVERSION == 0 ]
             echo
         else
             echo "Error: SNP genome is empty"
+	    exit 1
         fi
     else
         echo "Error: SNP genome does not exist"
+        exit 1
     fi
 fi
 
