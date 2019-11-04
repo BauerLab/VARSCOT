@@ -14,7 +14,7 @@ int main(int argc, char *argv[])
 
     // Argument Parser
     ArgumentParser parser("VARSCOT - Index Creation");
-    addDescription(parser, "Application for creating an index (that is needed for the search application). Only supports multi sequence FASTA-files with Dna5 alphabet (A, C, G, T, N). At most 65536 sequences supported, not more than 4 giga bases in total. The index is built using secondary memory. If you get an IO-error, you are probably running out of quota. Try: TMPDIR=/path/to/somewhere/with/enough/quota");
+    addDescription(parser, "Application for creating an index (that is needed for the search application). Only supports multi sequence FASTA-files with Dna5 alphabet (A, C, G, T, N). The FASTA file may not contain more than 4 giga bases in total. The index is built using secondary memory. If you get an IO-error, you are probably running out of quota. Try: TMPDIR=/path/to/somewhere/with/enough/quota");
 
     addOption(parser, ArgParseOption("G", "genome", "Path to the genome (.fa, .fasta, .fastq)", ArgParseArgument::INPUT_FILE, "IN"));
 	setValidValues(parser, "genome", "fa fasta fastq");

@@ -9,7 +9,7 @@ namespace seqan {
 template <typename TChar, typename TOwner>
 struct SAValue<StringSet<String<TChar>, TOwner > >
 {
-    typedef Pair<uint16_t, uint32_t> Type;
+    typedef Pair<uint32_t, uint32_t> Type;
 };
 
 template <typename TChar, typename TOwner>
