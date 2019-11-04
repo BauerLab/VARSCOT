@@ -259,7 +259,7 @@ char const * inputPath, unsigned const & seqLength, unsigned const & sampleIndex
         chrTable.resize(length(contigNames(ioContext)));
 
         for (unsigned i = 0; i < length(contigNames(ioContext)); i++)
-            chrTable[i] = "chr" + (std::string) toCString(contigNames(ioContext)[i]);
+            chrTable[i] = (std::string) toCString(contigNames(ioContext)[i]);
     }
     catch (Exception const & e)
     {
