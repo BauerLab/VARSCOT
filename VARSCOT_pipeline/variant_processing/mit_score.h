@@ -19,7 +19,6 @@ double calcMitScore(std::vector<int> const & mismatchPos)
     if (mismatchPos == perfectMatch)
     {
         nm = 0;
-        s3 = 1;
     }
     else
     {
@@ -36,6 +35,10 @@ double calcMitScore(std::vector<int> const & mismatchPos)
         s3 = (double) 1 / (double) std::pow(nm, 2);
     }
 
+    if(nm==0)
+    {
+        return 100;
+    }
     std::vector<double> const matrixM{0, 0, 0.014, 0, 0, 0.395, 0.317, 0, 0.389, 0.079, 0.445, 0.508, 0.613, 0.851, 0.732, 0.828, 0.615, 0.804, 0.685, 0.583};
 
     s1 = 1;
