@@ -1,4 +1,5 @@
 #!/bin/bash
+set -Eeuo pipefail
 # Pipeline:
 # 1) Reads in a VCF file, extracts SNP genome and writes it to fasta file
 # 2) Maps reads against reference and SNP genome
@@ -125,9 +126,9 @@ fi
 
 
 # Trap for exit or termination of the program. Removes temp folder. Not applied when verbose is TRUE.
-if [ -z "${VERBOSE}" ]
+if [ -z "${VERBOSE:-}" ]
   then
-    trap "rm -rf ${TEMPDIR}; exit 255;" EXIT SIGINT SIGKILL SIGTERM SIGSTOP
+    trap "rm -rf ${TEMPDIR}; exit 255;" EXIT SIGINT SIGKILL SIGTERM SIGSTOP ERR
 fi
 
 
@@ -135,43 +136,43 @@ echo "Starting analysis ..."
 # Set variable for pipeline run with or without SNP information
 # Test if all arguments are supplied
 SNPVERSION=0
-if [ -z "${VCFPATH}" ]
+if [ -z "${VCFPATH:-}" ]
   then
     SNPVERSION=1
     echo "Warning: No VCF file supplied. Running analysis without variant information."
 fi
 
-if [ -z "${SAMPLE}" ] && [ $SNPVERSION == 0 ]
+if [ -z "${SAMPLE:-}" ] && [ $SNPVERSION == 0 ]
   then
     SAMPLE=0
     echo "Warning: No sample information provided. First sample is chosen by default."
 fi
 
-if [ -z "${TARGETPATH}" ]
+if [ -z "${TARGETPATH:-}" ]
   then
     echo "Error: No on-target file path (.bed) supplied. See -h option for correct usage."
     exit 2
 fi
 
-if [ -z "${OUTPUTPATH}" ]
+if [ -z "${OUTPUTPATH:-}" ]
   then
     echo "Error: No output file path (.txt) supplied. See -h option for correct usage."
     exit 2
 fi
 
-if [ -z "${GENOMEPATH}" ]
+if [ -z "${GENOMEPATH:-}" ]
   then
     echo "Error: No genome (reference) path supplied. See -h option for correct usage."
     exit 2
 fi
 
-if [ -z "${INDEXPATH}" ]
+if [ -z "${INDEXPATH:-}" ]
   then
     echo "Error: No path to bidirectional index supplied. See -h option for correct usage."
     exit 2
 fi
 
-if [ -z "${MISMATCH}" ]
+if [ -z "${MISMATCH:-}" ]
   then
     MISMATCH=8
     echo "Warning: No maximum number of mismatches specified. 8 is chosen by default."
@@ -181,17 +182,17 @@ elif (( $MISMATCH > 8 )) || (( $MISMATCH < 0 ))
     exit 2
 fi
 
-if [ -z "${THREADS}" ]
+if [ -z "${THREADS:-}" ]
   then
     THREADS=8
 fi
 
-if [ -z "${PAM}" ]
+if [ -z "${PAM:-}" ]
   then
     PAM="none"
 fi
 
-if [ -z "${EVALUATION}" ]
+if [ -z "${EVALUATION:-}" ]
   then
     EVALUATION="mit"
 elif [ "${EVALUATION}" != "class" ] && [ "${EVALUATION}" != "prob" ] && [ "${EVALUATION}" != "mit" ]
