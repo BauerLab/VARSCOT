@@ -127,13 +127,11 @@ fi
 # CREATE TEMP DIRECTORY THAT IS REMOVED IN THE END
 # Files as bam file, SNP genome, etc are written into this directory
 
-if [ ! -d "${TEMPDIR}" ]
-  then
-    mkdir "${TEMPDIR}"
-else
+if [ -d "${TEMPDIR}" ]
+then
     rm -rf "${TEMPDIR}"
-    mkdir "${TEMPDIR}"
 fi
+mkdir "${TEMPDIR}"
 
 
 # Trap for exit or termination of the program. Removes temp folder. Not applied when verbose is TRUE.
@@ -260,25 +258,12 @@ export OMP_NUM_THREADS=${THREADS}
 
 # CREATE FASTA FILES OF ON-TARGETS
 build/variant_processing_build/fasta_writer "${TEMPDIR}/${TARGETPREFIX}.fa" "${TEMPDIR}/${TARGETPREFIX}_flanking.fa" "$TARGETPATH" "$GENOMEPATH"
-# Catch exit code of fasta writer
-rc=$?
-if [[ $rc != 0 ]]
-  then
-    exit $rc
-fi
 
 # TUSCAN REGRESSION FOR ON-TARGET ACTIVITY
 echo "Measuring on-target activity"
 echo
 python "${TUSCANPATH}/TUSCAN.py" -i "${TEMPDIR}/${TARGETPREFIX}_flanking.fa" -o "${TEMPDIR}/${TARGETPREFIX}_activity.txt" -m Regression -t fa
-# Catch exit code of TUSCAN
-rc=$?
-if [[ $rc != 0 ]]
-  then
-    exit $rc
-fi
 
-echo
 # VCF LOADER
 if [ $SNPVERSION == 0 ]
   then
@@ -287,19 +272,12 @@ if [ $SNPVERSION == 0 ]
     cut -f 1-9,$SAMPLE_COLUMN  "$VCFPATH" > "${TEMPDIR}/cut.vcf"
     echo "Processing VCF file"
     build/variant_processing_build/vcf_loader "${TEMPDIR}/cut.vcf" "${TEMPDIR}/${OUTPUTPREFIX}.fa" "$GENOMEPATH" 0 "$SEQLENGTH" "$THREADS" >/dev/null
-    # Catch exit code of vcf loader
-    rc=$?
-    if [[ $rc != 0 ]]
-      then
-        exit $rc
-    fi
     # Check if fasta file was created and is not empty
     if [ -f "${TEMPDIR}/${OUTPUTPREFIX}.fa" ]
       then
         if [ -s "${TEMPDIR}/${OUTPUTPREFIX}.fa" ]
           then
             echo "SNP genome successfully built"
-            echo
         else
             echo "Error: SNP genome is empty"
 	    exit 1
@@ -310,7 +288,6 @@ if [ $SNPVERSION == 0 ]
     fi
 fi
 
-
 # READ MAPPING
 ref_mapping()
 {
@@ -320,13 +297,6 @@ ref_mapping()
     else
       then
         build/read_mapping_build/bidir_mapping -G "${GENOMEPATH}" -I "${INDEXPATH}" -R "${TEMPDIR}/${TARGETPREFIX}.fa" -M "$MISMATCH" -T "$THREADS" -P "$PAM" -O "${TEMPDIR}/${OUTPUTPREFIX}_reference.sam"
-    fi
-
-    # Catch exit code of read mapping
-    rc=$?
-    if [[ $rc != 0 ]]
-      then
-        exit $rc
     fi
 }
 
@@ -343,13 +313,6 @@ snp_mapping()
       then
         build/read_mapping_build/bidir_mapping -G "${TEMPDIR}/${OUTPUTPREFIX}.fa" -I "${SNPINDEXPATH}" -R "${TEMPDIR}/${TARGETPREFIX}.fa" -M "$MISMATCH" -T "$THREADS" -P "$PAM" -O "${TEMPDIR}/${OUTPUTPREFIX}_snp.sam"
     fi
-
-    # Catch exit code of read mapping
-    rc=$?
-    if [[ $rc != 0 ]]
-      then
-        exit $rc
-    fi
 }
 
 echo "Mapping on-targets"
@@ -363,66 +326,28 @@ else
 fi
 
 echo "Mapping completed"
-echo
 
 # MERGE BAM FILES AND CREATE OUTPUT
 echo "Merging results"
-echo
 if [ $SNPVERSION == 0 ] && [ "${EVALUATION}" == "mit" ]
   then
     build/variant_processing_build/bam_merger "${OUTPUTPATH}" "${OUTPUTDIR}/${OUTPUTPREFIX}_feature_matrix.txt" "${TEMPDIR}/${OUTPUTPREFIX}_reference.sam" "${TEMPDIR}/${OUTPUTPREFIX}_snp.sam" "$TARGETPATH" "$GENOMEPATH" "${TEMPDIR}/${OUTPUTPREFIX}.fa" "${TEMPDIR}/${TARGETPREFIX}_activity.txt" "$MISMATCH" "$SEQLENGTH" "$THREADS" 0 >/dev/null
-    # Catch exit code of bam merger
-    rc=$?
-    if [[ $rc != 0 ]]
-      then
-        exit $rc
-    fi
 elif [ $SNPVERSION == 0 ] && [ "${EVALUATION}" != "mit" ]
   then
     build/variant_processing_build/bam_merger "${OUTPUTPATH}" "${OUTPUTDIR}/${OUTPUTPREFIX}_feature_matrix.txt" "${TEMPDIR}/${OUTPUTPREFIX}_reference.sam" "${TEMPDIR}/${OUTPUTPREFIX}_snp.sam" "$TARGETPATH" "$GENOMEPATH" "${TEMPDIR}/${OUTPUTPREFIX}.fa" "${TEMPDIR}/${TARGETPREFIX}_activity.txt"  "$MISMATCH" "$SEQLENGTH" "$THREADS" 1 >/dev/null
-    # Catch exit code of bam merger
-    rc=$?
-    if [[ $rc != 0 ]]
-      then
-        exit $rc
-    fi
 elif [ $SNPVERSION == 1 ] && [ "${EVALUATION}" == "mit" ]
   then
     build/variant_processing_build/bam_merger_ref_only "${OUTPUTPATH}" "${OUTPUTDIR}/${OUTPUTPREFIX}_feature_matrix.txt" "${TEMPDIR}/${OUTPUTPREFIX}_reference.sam" "$TARGETPATH" "$GENOMEPATH" "${TEMPDIR}/${TARGETPREFIX}_activity.txt" "$MISMATCH" "$SEQLENGTH" 0 >/dev/null
-     # Catch exit code of bam merger
-    rc=$?
-    if [[ $rc != 0 ]]
-      then
-        exit $rc
-    fi
 else
     build/variant_processing_build/bam_merger_ref_only "${OUTPUTPATH}" "${OUTPUTDIR}/${OUTPUTPREFIX}_feature_matrix.txt" "${TEMPDIR}/${OUTPUTPREFIX}_reference.sam" "$TARGETPATH" "$GENOMEPATH" "${TEMPDIR}/${TARGETPREFIX}_activity.txt" "$MISMATCH" "$SEQLENGTH" 1 >/dev/null
-    # Catch exit code of bam merger
-    rc=$?
-    if [[ $rc != 0 ]]
-      then
-        exit $rc
-    fi
 fi
 
 if [ "${EVALUATION}" == "class" ]
   then
     Rscript classification/classificationPipeline.R  "${OUTPUTPATH}" "${OUTPUTDIR}/${OUTPUTPREFIX}_feature_matrix.txt" FALSE
-    # Catch exit code of Rscript
-    rc=$?
-    if [[ $rc != 0 ]]
-      then
-        exit $rc
-    fi
 elif [ "${EVALUATION}" == "prob" ]
   then
     Rscript classification/classificationPipeline.R  "${OUTPUTPATH}" "${OUTPUTDIR}/${OUTPUTPREFIX}_feature_matrix.txt" TRUE
-    # Catch exit code of Rscript
-    rc=$?
-    if [[ $rc != 0 ]]
-      then
-        exit $rc
-    fi
 fi
 
 
